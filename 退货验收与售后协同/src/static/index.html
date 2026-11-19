@@ -94,24 +94,50 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   if(b.dataset.tab==='facts')loadFacts();
 });
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let curPid='WB2026W44-001';
+const excState={pending:'待核对',claimed:'已认领',closed:'已关闭'};
 async function loadStatus(){
-  const pid=document.getElementById('pid').value.trim()||'WB2026W44-001';
-  const r=await fetch('/api/parcels/'+pid+'/explain');const ex=await r.json();
-  const r2=await fetch('/api/parcels/'+pid+'/status');
-  if(!r2.ok){document.getElementById('st-out').innerHTML='<div class="hint" style="color:var(--red)">'+esc((await r2.json()).detail)+'</div>';return}
-  const d=await r2.json();
-  const cls={'black_box':'black_box','exception':'exception','pending':'pending','done':'','in_progress':''};
-  let h='<ul class="tl">';
-  for(const t of d.timeline){
-    h+='<li class="'+(cls[t.status]||'')+'"><span class="nd">'+esc(t.node)+'</span><span class="who">'+esc(t.actor||'')+(t.at?(' · '+t.at):'')+'</span>';
-    if(t.status==='black_box')h+='<div><span class="badge b-warn">黑箱等待</span></div>';
-    if(t.status==='exception')h+='<div><span class="badge b-red">异常暂停</span></div>';
-    if(t.status==='in_progress')h+='<div><span class="badge b-green">进行中</span></div>';
-    if(t.note)h+='<div class="note">'+esc(t.note)+'</div>';
-    h+='</li>';
+  const out=document.getElementById('st-out');
+  curPid=document.getElementById('pid').value.trim()||'WB2026W44-001';
+  try{
+    const r2=await fetch('/api/parcels/'+encodeURIComponent(curPid)+'/status');
+    if(!r2.ok){out.innerHTML='<div class="hint" style="color:var(--red)">'+esc((await r2.json()).detail)+'</div>';return}
+    const d=await r2.json();
+    const ex=await (await fetch('/api/parcels/'+encodeURIComponent(curPid)+'/explain')).json();
+    const cls={'black_box':'black_box','exception':'exception','pending':'pending','done':'','in_progress':''};
+    let h='<ul class="tl">';
+    for(const t of d.timeline){
+      h+='<li class="'+(cls[t.status]||'')+'"><span class="nd">'+esc(t.node)+'</span><span class="who">'+esc(t.actor||'')+(t.at?(' · '+t.at):'')+'</span>';
+      if(t.status==='black_box')h+='<div><span class="badge b-warn">黑箱等待</span></div>';
+      if(t.status==='exception')h+='<div><span class="badge b-red">异常暂停</span></div>';
+      if(t.status==='in_progress')h+='<div><span class="badge b-green">进行中</span></div>';
+      if(t.note)h+='<div class="note">'+esc(t.note)+'</div>';
+      h+='</li>';
+    }
+    h+='</ul><div class="card" style="background:#f8fafc;margin-top:12px"><b>状态解释：</b>'+esc(ex.explanation)+'<div class="cite">引用：'+ex.citations.map(c=>esc(c.fact_id)).join('、')+'</div></div>';
+    if(d.exception){
+      const e=d.exception;
+      h+='<div class="card" style="background:#fff7ed;border-color:#fed7aa"><h2>异常待办 · '+esc(e.type)+'</h2>'
+       +'<div class="hint">责任岗位：'+esc(e.assignee_role)+' · 状态：'+esc(excState[e.state]||e.state)
+       +(e.claimed_by?(' · 接手人：'+esc(e.claimed_by)+'（'+esc(e.claimed_at)+'）'):'')+'</div>'
+       +'<ul style="margin:8px 0 0 18px">'+e.checklist.map(c=>'<li>'+esc(c)+'</li>').join('')+'</ul>'
+       +(e.state==='pending'?'<button class="go" style="margin:10px 0 0" onclick="actExc(\'claim\')">认领待办</button>':'')
+       +(e.state==='claimed'?'<button class="go" style="margin:10px 0 0" onclick="actExc(\'close\')">确认核对完成</button>':'')
+       +'<div class="hint" id="exc-msg"></div></div>';
+    }
+    out.innerHTML=h;
+  }catch(err){
+    out.innerHTML='<div class="hint" style="color:var(--red)">请求失败，请稍后重试</div>';
   }
-  h+='</ul><div class="card" style="background:#f8fafc;margin-top:12px"><b>状态解释：</b>'+esc(ex.explanation)+'<div class="cite">引用：'+ex.citations.map(esc).join('、')+'</div></div>';
-  document.getElementById('st-out').innerHTML=h;
+}
+async function actExc(action){
+  const key=action==='claim'?'claimant':'operator';
+  try{
+    const r=await fetch('/api/exceptions/'+encodeURIComponent(curPid)+'/'+action+'?'+key+'='+encodeURIComponent('工单员'),{method:'POST'});
+    const d=await r.json();
+    if(!r.ok){document.getElementById('exc-msg').textContent=d.detail;return}
+    loadStatus();
+  }catch(err){document.getElementById('exc-msg').textContent='请求失败，请稍后重试'}
 }
 async function loadCaliber(){
   const d=await (await fetch('/api/metrics/completion')).json();
