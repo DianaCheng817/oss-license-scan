@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>退货验收与售后协同 · MVP 原型</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#1f2329;--muted:#6b7280;--line:#e5e7eb;--accent:#2563eb;--warn:#d97706;--red:#dc2626;--green:#16a34a}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Microsoft YaHei",system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+header{background:var(--card);border-bottom:1px solid var(--line);padding:14px 24px;display:flex;justify-content:space-between;align-items:center}
+header h1{font-size:17px}
+header .tag{color:var(--warn);font-size:12px;border:1px solid var(--warn);border-radius:4px;padding:2px 8px}
+nav{display:flex;gap:4px;padding:10px 24px 0;background:var(--card);border-bottom:1px solid var(--line)}
+nav button{border:none;background:none;padding:10px 16px;font-size:14px;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent}
+nav button.on{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
+main{max-width:960px;margin:20px auto;padding:0 24px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:18px;margin-bottom:16px}
+.card h2{font-size:15px;margin-bottom:12px}
+input[type=text]{width:60%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-size:14px}
+button.go{padding:8px 16px;border:none;background:var(--accent);color:#fff;border-radius:6px;cursor:pointer;margin-left:8px}
+.hint{color:var(--muted);font-size:12px;margin-top:8px}
+.tl{list-style:none;margin-top:12px}
+.tl li{position:relative;padding:10px 0 10px 28px;border-left:2px solid var(--line);margin-left:10px}
+.tl li::before{content:"";position:absolute;left:-7px;top:14px;width:12px;height:12px;border-radius:50%;background:var(--green)}
+.tl li.black_box::before{background:var(--warn)}
+.tl li.exception::before{background:var(--red)}
+.tl li.pending::before{background:#c4c9d4}
+.tl .nd{font-weight:600}
+.tl .who{color:var(--muted);font-size:12px;margin-left:8px}
+.tl .note{color:var(--warn);font-size:12px;margin-top:4px}
+.badge{display:inline-block;font-size:12px;border-radius:4px;padding:1px 8px;margin-right:6px}
+.b-warn{background:#fef3c7;color:#92400e}.b-red{background:#fee2e2;color:#991b1b}.b-green{background:#dcfce7;color:#166534}
+table{width:100%;border-collapse:collapse;margin-top:8px}
+th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;font-size:13px}
+th{background:#f3f4f6}
+.cite{color:var(--accent);font-size:12px}
+.answer{margin-top:12px;line-height:1.7}
+.fact{background:#f8fafc;border-left:3px solid var(--accent);padding:8px 12px;margin:8px 0;font-size:13px}
+.footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}
+</style>
+</head>
+<body>
+<header>
+  <h1>万象优选 · 退货验收与售后协同 MVP</h1>
+  <span class="tag">训练数据 · 合成事实演示</span>
+</header>
+<nav>
+  <button class="on" data-tab="status">包裹状态</button>
+  <button data-tab="caliber">三口径对照</button>
+  <button data-tab="kb">知识问答</button>
+  <button data-tab="facts">事实台账</button>
+</nav>
+<main>
+  <section id="tab-status">
+    <div class="card">
+      <h2>包裹状态时间线</h2>
+      <input type="text" id="pid" placeholder="输入包裹号，如 WB2026W44-001">
+      <button class="go" onclick="loadStatus()">查询</button>
+      <div class="hint">演示号：WB2026W44-001（签收后黑箱）· 002（审批中）· 003（异常暂停）</div>
+      <div id="st-out"></div>
+    </div>
+  </section>
+  <section id="tab-caliber" hidden>
+    <div class="card">
+      <h2>三套「完成」口径对照（2026-W44）</h2>
+      <div id="cal-out"></div>
+      <div class="hint">来源：f53 · 口径统一（O3）是收益可度量的前置条件</div>
+    </div>
+  </section>
+  <section id="tab-kb" hidden>
+    <div class="card">
+      <h2>知识问答（RAG 检索 · 回答带事实编号引用）</h2>
+      <input type="text" id="q" placeholder="例如：一包多单怎么处理？">
+      <button class="go" onclick="ask()">提问</button>
+      <div class="hint">无来源时回答「尚无记录」，不编造（f34 口径）</div>
+      <div id="kb-out" class="answer"></div>
+    </div>
+  </section>
+  <section id="tab-facts" hidden>
+    <div class="card">
+      <h2>事实台账（35 条 · f00–f55）</h2>
+      <table id="fact-tbl"><thead><tr><th>编号</th><th>角色</th><th>主题</th><th>事实</th></tr></thead><tbody></tbody></table>
+    </div>
+  </section>
+</main>
+<div class="footer">FDE 训练中心练习项目 · 业务事实为训练场景合成数据 · 接口文档见 /docs</div>
+<script>
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('nav button').forEach(x=>x.classList.remove('on'));b.classList.add('on');
+  document.querySelectorAll('main section').forEach(s=>s.hidden=true);
+  document.getElementById('tab-'+b.dataset.tab).hidden=false;
+  if(b.dataset.tab==='caliber')loadCaliber();
+  if(b.dataset.tab==='facts')loadFacts();
+});
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+async function loadStatus(){
+  const pid=document.getElementById('pid').value.trim()||'WB2026W44-001';
+  const r=await fetch('/api/parcels/'+pid+'/explain');const ex=await r.json();
+  const r2=await fetch('/api/parcels/'+pid+'/status');
+  if(!r2.ok){document.getElementById('st-out').innerHTML='<div class="hint" style="color:var(--red)">'+esc((await r2.json()).detail)+'</div>';return}
+  const d=await r2.json();
+  const cls={'black_box':'black_box','exception':'exception','pending':'pending','done':'','in_progress':''};
+  let h='<ul class="tl">';
+  for(const t of d.timeline){
+    h+='<li class="'+(cls[t.status]||'')+'"><span class="nd">'+esc(t.node)+'</span><span class="who">'+esc(t.actor||'')+(t.at?(' · '+t.at):'')+'</span>';
+    if(t.status==='black_box')h+='<div><span class="badge b-warn">黑箱等待</span></div>';
+    if(t.status==='exception')h+='<div><span class="badge b-red">异常暂停</span></div>';
+    if(t.status==='in_progress')h+='<div><span class="badge b-green">进行中</span></div>';
+    if(t.note)h+='<div class="note">'+esc(t.note)+'</div>';
+    h+='</li>';
+  }
+  h+='</ul><div class="card" style="background:#f8fafc;margin-top:12px"><b>状态解释：</b>'+esc(ex.explanation)+'<div class="cite">引用：'+ex.citations.map(esc).join('、')+'</div></div>';
+  document.getElementById('st-out').innerHTML=h;
+}
+async function loadCaliber(){
+  const d=await (await fetch('/api/metrics/completion')).json();
+  let h='<table><thead><tr><th>岗位</th><th>口径</th><th>完成量（件）</th></tr></thead><tbody>';
+  for(const k of Object.keys(d.calibers))h+='<tr><td>'+esc(d.calibers[k].name.split('·')[0])+'</td><td>'+esc(d.calibers[k].name.split('·')[1])+'</td><td>'+d.calibers[k].count.toLocaleString()+'</td></tr>';
+  h+='</tbody></table><div class="hint" style="margin-top:10px">最大差异 <b>'+d.max_diff.toLocaleString()+' 件（'+d.diff_percent+'%）</b> · 引用 '+esc(d.source)+'</div>';
+  document.getElementById('cal-out').innerHTML=h;
+}
+async function ask(){
+  const q=document.getElementById('q').value.trim();if(!q)return;
+  const d=await (await fetch('/api/kb/ask?q='+encodeURIComponent(q))).json();
+  let h='<b>'+esc(d.answer)+'</b>';
+  for(const c of d.citations)h+='<div class="fact"><span class="cite">['+esc(c.fact_id)+']</span> '+esc(c.text)+'<div class="hint">来源角色：'+esc(c.role)+' · 材料：'+esc(c.evidence)+'</div></div>';
+  document.getElementById('kb-out').innerHTML=h;
+}
+async function loadFacts(){
+  const list=await (await fetch('/api/facts')).json();
+  const tb=document.querySelector('#fact-tbl tbody');
+  tb.innerHTML=list.map(f=>'<tr><td class="cite">'+esc(f.fact_id)+'</td><td>'+esc(f.role)+'</td><td>'+esc(f.topic)+'</td><td>'+esc(f.text)+'</td></tr>').join('');
+}
+loadStatus();
+</script>
+</body>
+</html>
